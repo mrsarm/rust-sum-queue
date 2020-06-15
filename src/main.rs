@@ -71,4 +71,5 @@ fn main() {
     for num in queue.iter() {
         print!(" {}", num)
     }
+    println!()
 }
