@@ -4,43 +4,54 @@
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use std::collections::binary_heap::Iter;
-use std::time::{SystemTime, UNIX_EPOCH};
 use std::iter::Map;
+use std::ops::Add;
+use std::time::{SystemTime, UNIX_EPOCH};
 
-#[derive(Debug)]
-pub struct QueueElement<T: Ord + Copy> {
+
+pub struct QueueElement<T: Copy> {
     time: u64,  // "Unix" Time, or seconds since EPOCH when the value was added
     value: T
 }
 
-impl<T: Ord + Copy> PartialEq for QueueElement<T> {
+pub struct QueueStats<T: Copy + Ord + Add<Output = T>> {
+    pub min: Option<T>,
+    pub max: Option<T>,
+    pub sum: Option<T>,
+    pub len: usize
+}
+
+impl<T: Copy> PartialEq for QueueElement<T> {
     fn eq(&self, other: &Self) -> bool {
         self.time == other.time
     }
 }
-impl<T: Ord + Copy> Eq for QueueElement<T> {}
+impl<T: Copy> Eq for QueueElement<T> {}
 
-impl<T: Ord + Copy> Ord for QueueElement<T> {
+impl<T: Copy> Ord for QueueElement<T> {
     fn cmp(&self, other: &Self) -> Ordering {
         // Reverse order to set lower number higher
         other.time.cmp(&self.time)
     }
 }
 
-impl<T: Ord + Copy> PartialOrd for QueueElement<T> {
+impl<T: Copy> PartialOrd for QueueElement<T> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-pub struct SumQueue<T: Ord + Copy> {
+pub struct SumQueue<T: Copy> {
     heap: BinaryHeap<QueueElement<T>>,
-    max_age: u64    // max age in seconds
+    pub max_age: u64    // max age in seconds
 }
 
-impl<T: Ord + Copy> SumQueue<T> {
-    pub fn new(max_age: u64) -> SumQueue<T> {
-        SumQueue { heap: BinaryHeap::<QueueElement<T>>::new(), max_age }
+impl<T: Copy> SumQueue<T> {
+    pub fn new(max_age_secs: u64) -> SumQueue<T> {
+        SumQueue {
+            heap: BinaryHeap::<QueueElement<T>>::new(),
+            max_age: max_age_secs
+        }
     }
 
     pub fn with_capacity(max_age_secs: u64, capacity: usize) -> SumQueue<T> {
@@ -50,16 +61,17 @@ impl<T: Ord + Copy> SumQueue<T> {
         }
     }
 
-    pub fn push(&mut self, item: T) {
+    pub fn push(&mut self, item: T) -> usize {
         let now = self.now();
         self.clear_oldest(now);
         self.heap.push(QueueElement {
             time: now,
             value: item
         });
+        self.heap.len()
     }
 
-    pub fn clear_oldest(&mut self, now: u64) {
+    fn clear_oldest(&mut self, now: u64) {
         while let Some(el) = self.heap.peek() {
             let peek_age = now - el.time;
             if peek_age > self.max_age {
@@ -100,17 +112,49 @@ impl<T: Ord + Copy> SumQueue<T> {
     }
 }
 
+impl<T: Copy + Ord + Add<Output = T>> SumQueue<T> {
+
+    fn _stats(&mut self, len: usize) -> QueueStats<T> {
+        let mut min = None; let mut max = None; let mut sum = None;
+        for i in self.heap.iter().map(|x| x.value) {
+            if min == None || Some(i) < min {
+                min = Some(i);
+            }
+            if max == None || Some(i) > max {
+                max = Some(i);
+            }
+            sum = match sum {
+                Some(s) => Some(s + i),
+                None => Some(i)
+            };
+        }
+        QueueStats {
+            min, max, sum, len
+        }
+    }
+
+    pub fn stats(&mut self) -> QueueStats<T> {
+        let len = self.len();
+        self._stats(len)
+    }
+
+    pub fn push_and_stats(&mut self, item: T) -> QueueStats<T> {
+        let len = self.push(item);
+        self._stats(len)
+    }
+}
+
 mod tests {
     pub use std::thread;
     pub use std::time::Duration;
     pub use crate::SumQueue;
 
     #[test]
-    fn push_pop() {
+    fn push_pop_peek() {
         let mut queue: SumQueue<i32> = SumQueue::new(60);
         queue.push(1);
         queue.push(5);
-        queue.push(2);
+        assert_eq!(queue.push(2), 3);  // push return queue length
         assert_eq!(queue.peek(), Some(1));
         assert_eq!(queue.peek(), Some(1));  // still the same
         assert_eq!(queue.pop(), Some(1));
@@ -148,7 +192,7 @@ mod tests {
         // data can be iterated as many time as you want
         assert_eq!(queue.iter().collect::<Vec<_>>(), vec!["Hey", "You", "!"]);
         print!("heap data, iterate one by one... :");
-        for word in queue.iter() {
+        for word in queue.iter() {  // iterate one by one don't crash
             print!(" {}", word)
         }
         println!();
@@ -182,6 +226,46 @@ mod tests {
         sleep_secs(2);
         assert_eq!(queue.iter().collect::<Vec<_>>(), vec![]);
         println!("No elements kept: {:?}", queue.iter().collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn stats() {
+        let mut queue: SumQueue<i64> = SumQueue::new(1000);
+        let mut stats = queue.stats();
+        assert_eq!(stats.min, None);
+        assert_eq!(stats.max, None);
+        assert_eq!(stats.sum, None);
+        assert_eq!(stats.len, 0);
+
+        queue.push(-10);
+        queue.push(50);
+        queue.push(20);
+        stats = queue.stats();
+        assert_eq!(stats.min, Some(-10));
+        assert_eq!(stats.max, Some(50));
+        assert_eq!(stats.sum, Some(60));
+        assert_eq!(stats.len, 3);
+
+        queue.clear();
+        stats = queue.stats();
+        assert_eq!(stats.min, None);
+        assert_eq!(stats.max, None);
+        assert_eq!(stats.sum, None);
+        assert_eq!(stats.len, 0);
+
+        queue.push(100_000);
+        stats = queue.stats();
+        assert_eq!(stats.min, Some(100_000));
+        assert_eq!(stats.max, Some(100_000));
+        assert_eq!(stats.sum, Some(100_000));
+        assert_eq!(stats.len, 1);
+
+        queue.push(5);
+        stats = queue.push_and_stats(1);
+        assert_eq!(stats.min, Some(1));
+        assert_eq!(stats.max, Some(100_000));
+        assert_eq!(stats.sum, Some(100_006));
+        assert_eq!(stats.len, 3);
     }
 
     #[cfg(test)]
