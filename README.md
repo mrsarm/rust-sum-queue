@@ -1,7 +1,7 @@
 sum-queue
 =========
 
-`SumQueue` it's a **Rust** :crab: type that keeps a fixed number of
+`SumQueue` it's a **Rust** :crab: queue type that keeps a fixed number of
 items by time, not capacity, similar to a cache, but with a simpler
 and faster implementation. It also allows to get summarized stats
 of the values on it:
@@ -32,17 +32,32 @@ println!("Stats - length of queue: {}", stats.len);              // 3
 assert_eq!(queue.pop(), Some(1));
 assert_eq!(queue.iter().collect::<Vec<_>>(), vec![&5, &2]);
 
+// After a second the elements are still the same
 thread::sleep(time::Duration::from_secs(1));
-
 println!("Same elements: {:?}", queue.iter().collect::<Vec<_>>());      // [5, 2]
 
-queue.push(50);
+queue.push(50); // Add an element 1 second younger than the rest of elements
 println!("Same elements + 50: {:?}", queue.iter().collect::<Vec<_>>()); // [5, 2, 50]
 
 // Now let sleep 2 secs so the first elements expire
 thread::sleep(time::Duration::from_secs(2));
 println!("Just 50: {:?}", queue.iter().collect::<Vec<_>>());            // [50]
 
+// 2 seconds later the latest element also expires
 thread::sleep(time::Duration::from_secs(2));
 println!("No elements: {:?}", queue.iter().collect::<Vec<_>>());        // []
 ```
+
+Underneath it uses a [BinaryHeap](https://doc.rust-lang.org/std/collections/binary_heap/struct.BinaryHeap.html)
+struct to keep the values.
+
+
+About
+-----
+
+Source: https://github.com/mrsarm/rust-sum-queue
+
+Authors: (2020) Mariano Ruiz <mrsarm@gmail.cm>
+
+License: LGPL-3
+
