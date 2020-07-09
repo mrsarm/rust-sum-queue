@@ -168,7 +168,7 @@ mod tests {
 
     #[test]
     fn len_clear() {
-        let mut queue: SumQueue<char> = SumQueue::with_capacity(60, 20);
+        let mut queue: SumQueue<char> = SumQueue::with_capacity(60, 2); // small capacity shouldn't be a problem
         assert_eq!(queue.len(), 0);
         queue.push('a');
         queue.push('b');
