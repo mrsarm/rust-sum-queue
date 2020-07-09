@@ -9,44 +9,44 @@ use std::ops::Add;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 
-pub struct QueueElement<T: Copy> {
+pub struct QueueElement<T> {
     time: u64,  // "Unix" Time, or seconds since EPOCH when the value was added
     value: T
 }
 
-pub struct QueueStats<T: Copy + Ord + Add<Output = T>> {
+pub struct QueueStats<T: Ord + Add<Output = T>> {
     pub min: Option<T>,
     pub max: Option<T>,
     pub sum: Option<T>,
     pub len: usize
 }
 
-impl<T: Copy> PartialEq for QueueElement<T> {
+impl<T> PartialEq for QueueElement<T> {
     fn eq(&self, other: &Self) -> bool {
         self.time == other.time
     }
 }
-impl<T: Copy> Eq for QueueElement<T> {}
+impl<T> Eq for QueueElement<T> {}
 
-impl<T: Copy> Ord for QueueElement<T> {
+impl<T> Ord for QueueElement<T> {
     fn cmp(&self, other: &Self) -> Ordering {
         // Reverse order to set lower number higher
         other.time.cmp(&self.time)
     }
 }
 
-impl<T: Copy> PartialOrd for QueueElement<T> {
+impl<T> PartialOrd for QueueElement<T> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-pub struct SumQueue<T: Copy> {
+pub struct SumQueue<T> {
     heap: BinaryHeap<QueueElement<T>>,
     pub max_age: u64    // max age in seconds
 }
 
-impl<T: Copy> SumQueue<T> {
+impl<T> SumQueue<T> {
     pub fn new(max_age_secs: u64) -> SumQueue<T> {
         SumQueue {
             heap: BinaryHeap::<QueueElement<T>>::new(),
@@ -96,14 +96,14 @@ impl<T: Copy> SumQueue<T> {
         self.heap.len()
     }
 
-    pub fn iter(&mut self) -> Map<Iter<QueueElement<T>>, fn(&QueueElement<T>) -> T> {
+    pub fn iter(&mut self) -> Map<Iter<QueueElement<T>>, fn(&QueueElement<T>) -> &T> {
         self.clear_oldest(self.now());
-        self.heap.iter().map(|x| x.value)
+        self.heap.iter().map(|x| &x.value)
     }
 
-    pub fn peek(&mut self) -> Option<T> {
+    pub fn peek(&mut self) -> Option<&T> {
         self.clear_oldest(self.now());
-        self.heap.peek().map( |q_element| q_element.value)
+        self.heap.peek().map( |q_element| &q_element.value)
     }
 
     pub fn pop(&mut self) -> Option<T> {
@@ -155,15 +155,32 @@ mod tests {
         queue.push(1);
         queue.push(5);
         assert_eq!(queue.push(2), 3);  // push return queue length
-        assert_eq!(queue.peek(), Some(1));
-        assert_eq!(queue.peek(), Some(1));  // still the same
+        assert_eq!(queue.peek(), Some(&1));
+        assert_eq!(queue.peek(), Some(&1));  // still the same
         assert_eq!(queue.pop(), Some(1));
         assert_eq!(queue.pop(), Some(5));
         assert_eq!(queue.pop(), Some(2));
         assert_eq!(queue.pop(), None);
         assert_eq!(queue.peek(), None);
         queue.push(1_000);
-        assert_eq!(queue.peek(), Some(1_000));
+        assert_eq!(queue.peek(), Some(&1_000));
+    }
+
+    #[test]
+    fn push_pop_peek_refs() {
+        let mut queue: SumQueue<&i32> = SumQueue::new(60);
+        queue.push(&1);
+        queue.push(&5);
+        assert_eq!(queue.push(&2), 3);
+        assert_eq!(queue.peek(), Some(&&1));
+        assert_eq!(queue.peek(), Some(&&1));
+        assert_eq!(queue.pop(), Some(&1));
+        assert_eq!(queue.pop(), Some(&5));
+        assert_eq!(queue.pop(), Some(&2));
+        assert_eq!(queue.pop(), None);
+        assert_eq!(queue.peek(), None);
+        queue.push(&1_000);
+        assert_eq!(queue.peek(), Some(&&1_000));
     }
 
     #[test]
@@ -190,7 +207,7 @@ mod tests {
         queue.push("!");
         println!("heap data with &str references: {:?}", queue.iter().collect::<Vec<_>>());
         // data can be iterated as many time as you want
-        assert_eq!(queue.iter().collect::<Vec<_>>(), vec!["Hey", "You", "!"]);
+        assert_eq!(queue.iter().collect::<Vec<_>>(), vec![&"Hey", &"You", &"!"]);
         print!("heap data, iterate one by one... :");
         for word in queue.iter() {  // iterate one by one don't crash
             print!(" {}", word)
@@ -205,26 +222,26 @@ mod tests {
         queue.push(1);
         queue.push(5);
         queue.push(2);
-        assert_eq!(queue.iter().collect::<Vec<_>>(), vec![1, 5, 2]);
+        assert_eq!(queue.iter().collect::<Vec<_>>(), vec![&1, &5, &2]);
         println!("Elements in queue with max age of {} secs: {:?}",
                  max_age_secs, queue.iter().collect::<Vec<_>>());
 
         sleep_secs(1);
-        assert_eq!(queue.iter().collect::<Vec<_>>(), vec![1, 5, 2]);
+        assert_eq!(queue.iter().collect::<Vec<_>>(), vec![&1, &5, &2]);
         println!("No expiration yet, same elements: {:?}", queue.iter().collect::<Vec<_>>());
 
         println!("\nAdding element 50 ...");
         queue.push(50);
-        assert_eq!(queue.iter().collect::<Vec<_>>(), vec![1, 5, 2, 50]);
+        assert_eq!(queue.iter().collect::<Vec<_>>(), vec![&1, &5, &2, &50]);
         println!("Same elements + 50: {:?}", queue.iter().collect::<Vec<_>>());
 
         sleep_secs(2);
-        assert_eq!(queue.iter().collect::<Vec<_>>(), vec![50]);
+        assert_eq!(queue.iter().collect::<Vec<_>>(), vec![&50]);
         println!("Expired original list, only 50 in the list: {:?}",
                  queue.iter().collect::<Vec<_>>());
 
         sleep_secs(2);
-        assert_eq!(queue.iter().collect::<Vec<_>>(), vec![]);
+        assert_eq!(queue.iter().collect::<Vec<_>>().len(), 0);
         println!("No elements kept: {:?}", queue.iter().collect::<Vec<_>>());
     }
 
