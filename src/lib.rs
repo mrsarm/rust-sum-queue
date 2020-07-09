@@ -1,4 +1,3 @@
-// TODO add stats code
 // TODO add doc
 
 use std::cmp::Ordering;
@@ -41,6 +40,11 @@ impl<T> PartialOrd for QueueElement<T> {
     }
 }
 
+fn now() -> u64 {
+    SystemTime::now().duration_since(UNIX_EPOCH)
+        .expect("<-- Time went backwards").as_secs()
+}
+
 pub struct SumQueue<T> {
     heap: BinaryHeap<QueueElement<T>>,
     pub max_age: u64    // max age in seconds
@@ -62,7 +66,7 @@ impl<T> SumQueue<T> {
     }
 
     pub fn push(&mut self, item: T) -> usize {
-        let now = self.now();
+        let now = now();
         self.clear_oldest(now);
         self.heap.push(QueueElement {
             time: now,
@@ -86,28 +90,23 @@ impl<T> SumQueue<T> {
         self.heap.clear();
     }
 
-    fn now(&self) -> u64 {
-        SystemTime::now().duration_since(UNIX_EPOCH)
-            .expect("<-- Time went backwards").as_secs()
-    }
-
     pub fn len(&mut self) -> usize {
-        self.clear_oldest(self.now());
+        self.clear_oldest(now());
         self.heap.len()
     }
 
     pub fn iter(&mut self) -> Map<Iter<QueueElement<T>>, fn(&QueueElement<T>) -> &T> {
-        self.clear_oldest(self.now());
+        self.clear_oldest(now());
         self.heap.iter().map(|x| &x.value)
     }
 
     pub fn peek(&mut self) -> Option<&T> {
-        self.clear_oldest(self.now());
+        self.clear_oldest(now());
         self.heap.peek().map( |q_element| &q_element.value)
     }
 
     pub fn pop(&mut self) -> Option<T> {
-        self.clear_oldest(self.now());
+        self.clear_oldest(now());
         self.heap.pop().map( |q_element| q_element.value)
     }
 }
