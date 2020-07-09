@@ -11,7 +11,7 @@ use sum_queue::SumQueue;
 use std::{time, thread};
 
 // creates a queue where elements expires after 2 seconds
-let queue: SumQueue<i32> = SumQueue::new(2);
+let mut queue: SumQueue<i32> = SumQueue::new(2);
 queue.push(1);
 queue.push(5);
 queue.push(2);
