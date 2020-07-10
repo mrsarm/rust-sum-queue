@@ -8,5 +8,6 @@ license = "LGPL-3.0"
 readme = "README.md"
 homepage = "https://github.com/mrsarm/rust-sum-queue"
 repository = "https://github.com/mrsarm/rust-sum-queue"
+categories = ["data-structures", "algorithms", "caching"]
 
 [dependencies]
