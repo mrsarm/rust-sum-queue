@@ -3,7 +3,10 @@ name = "sum-queue"
 version = "0.1.0"
 authors = ["Mariano Ruiz <mrsarm@gmail.com>"]
 edition = "2018"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+description = "Queue struct that keeps a fixed number of items by time, not capacity, and allows to get summarized stats of its content"
+license = "LGPL-3.0"
+readme = "README.md"
+homepage = "https://github.com/mrsarm/rust-sum-queue"
+repository = "https://github.com/mrsarm/rust-sum-queue"
 
 [dependencies]

@@ -83,6 +83,6 @@ deallocate the expired elements.
 
 Source: https://github.com/mrsarm/rust-sum-queue
 
-Authors: (2020) Mariano Ruiz <mrsarm@gmail.cm>
+Authors: (2020) Mariano Ruiz <mrsarm@gmail.com>
 
 License: LGPL-3
