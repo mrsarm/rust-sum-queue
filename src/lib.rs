@@ -1,4 +1,79 @@
-// TODO add doc
+//! `SumQueue` it's a queue struct that keeps a fixed number of
+//! items by time, not capacity, similar to a cache, but with a simpler
+//! and faster implementation. It also allows to get summarized stats
+//! of the values on it at any time.
+//! 
+//! ## Examples
+//! 
+//! ```
+//! use sum_queue::SumQueue;
+//! use std::{time, thread};
+//! 
+//! // creates a queue where elements expires after 2 seconds
+//! let mut queue: SumQueue<i32> = SumQueue::new(2);
+//! queue.push(1);
+//! queue.push(10);
+//! queue.push(3);
+//! 
+//! // Check the peek without removing the element
+//! assert_eq!(queue.peek(), Some(&1));
+//! // elements are removed in the same order were pushed
+//! assert_eq!(queue.pop(), Some(1));
+//! assert_eq!(queue.pop(), Some(10));
+//! assert_eq!(queue.pop(), Some(3));
+//! assert_eq!(queue.pop(), None);
+//!
+//! // Lets puts elements again
+//! queue.push(1);
+//! queue.push(5);
+//! queue.push(2);
+//! // Elements can be iterated as many times you want
+//! println!("heap data: {:?}", queue.iter().collect::<Vec<_>>());  // [1, 5, 2]
+//! 
+//! // Check stats
+//! let stats = queue.stats();
+//! println!("Stats - min value in queue: {}", stats.min.unwrap());         // 1
+//! println!("Stats - max value in queue: {}", stats.max.unwrap());         // 5
+//! println!("Stats - sum all values in queue: {}", stats.sum.unwrap());    // 8
+//! println!("Stats - length of queue: {}", stats.len);                     // 3
+//! 
+//! assert_eq!(queue.pop(), Some(1));
+//! assert_eq!(queue.iter().collect::<Vec<_>>(), vec![&5, &2]);
+//! 
+//! // After a second the elements are still the same
+//! thread::sleep(time::Duration::from_secs(1));
+//! println!("Same elements: {:?}", queue.iter().collect::<Vec<_>>());      // [5, 2]
+//! 
+//! queue.push(50); // Add an element 1 second younger than the rest of elements
+//! println!("Same elements + 50: {:?}", queue.iter().collect::<Vec<_>>()); // [5, 2, 50]
+//! 
+//! // Now let sleep 2 secs so the first elements expire
+//! thread::sleep(time::Duration::from_secs(2));
+//! println!("Just 50: {:?}", queue.iter().collect::<Vec<_>>());            // [50]
+//! 
+//! // 2 seconds later the last element also expires
+//! thread::sleep(time::Duration::from_secs(2));
+//! println!("No elements: {:?}", queue.iter().collect::<Vec<_>>());        // []
+//! ```
+//!
+//! ## Implementation
+//!
+//! Underneath uses a [BinaryHeap](https://doc.rust-lang.org/std/collections/binary_heap/struct.BinaryHeap.html)
+//! struct to keep the values, and implements the same methods: `push()`, `pop()`, `peek()` ...
+//! although worth to note that the implementations of the `SumQueue` type take mutable
+//! ownership of the `self` reference (eg. `peek(&mut self) -> Option<&T>`). That is
+//! because the cleaning of the expired elements of the queue occurs each time
+//! a method is called to read or write a value, including the `len()` method.
+//!
+//! So as long you manage only one instance of `SumQueue`, there is no
+//! risk of excessive memory allocation, because while you push elements with the `push()`
+//! method, or call any other method to read the queue you are taking care of removing
+//! and deallocating the expired elements, but if you are using multiple instances, and
+//! pushing too many items to some queues and not accessing others further, the memory usage
+//! may growth with elements expired not been deallocated because you are not accessing
+//! those queues to push, pop or get the stats of them. In that case you can at least
+//! try to call often to the `len()` method to force the unused queues to remove and
+//! deallocate the expired elements.
 
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
@@ -7,16 +82,63 @@ use std::iter::Map;
 use std::ops::Add;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-
+/// Internal element used by `SumQueue` to hold the values.
+// TODO make it not public once the `SumQueue` has its own Iterator
 pub struct QueueElement<T> {
     time: u64,  // "Unix" Time, or seconds since EPOCH when the value was added
     value: T
 }
 
+/// Stats of the queue.
+///
+/// It provides the following statistics: min and max value
+/// in the queue, the sum of all the values and the length
+/// of all elements hold in the queue.
+///
+/// All the values resturned only take into account
+/// the existent elements in the queue, and not past
+/// elements removed because expiration or because
+/// removed.
+///
+/// You can get the stats object calling to
+/// the `stats()` method of the queue:
+///
+/// ```
+/// use sum_queue::SumQueue;
+/// let mut queue = SumQueue::new(1000);
+/// queue.push(-1);
+/// queue.push(5);
+/// queue.push(2);
+/// let stats = queue.stats();
+/// assert_eq!(stats.min, Some(-1));
+/// assert_eq!(stats.max, Some(5));
+/// assert_eq!(stats.sum, Some(6));
+/// assert_eq!(stats.len, 3);
+/// ```
+///
+/// But you can also get the stats
+/// while pushing elements, which it is more
+/// effecient than push and then get the stats:
+///
+/// ```
+/// use sum_queue::SumQueue;
+/// let mut queue = SumQueue::new(1000);
+/// queue.push(-1);
+/// queue.push(5);
+/// let stats = queue.push_and_stats(2);
+/// assert_eq!(stats.min, Some(-1));
+/// assert_eq!(stats.max, Some(5));
+/// assert_eq!(stats.sum, Some(6));
+/// assert_eq!(stats.len, 3);
+/// ```
 pub struct QueueStats<T: Ord + Add<Output = T>> {
+    /// min value of the queue
     pub min: Option<T>,
+    /// max value of the queue
     pub max: Option<T>,
+    /// sum of all the values in the queue
     pub sum: Option<T>,
+    /// size of the queue, same than `queue.len()`
     pub len: usize
 }
 
@@ -29,7 +151,7 @@ impl<T> Eq for QueueElement<T> {}
 
 impl<T> Ord for QueueElement<T> {
     fn cmp(&self, other: &Self) -> Ordering {
-        // Reverse order to set lower number higher
+        //! Reverse order to set lower number higher
         other.time.cmp(&self.time)
     }
 }
@@ -45,12 +167,30 @@ fn now() -> u64 {
         .expect("<-- Time went backwards").as_secs()
 }
 
+/// Main struct that holds the queue of elements.
+///
+/// There are different ways to create the queue:
+///
+/// ```
+/// use sum_queue::SumQueue;
+/// let mut queue: SumQueue<i32>;
+///
+/// // Create a queue with elements that expires after 60 seconds
+/// queue = SumQueue::new(60);
+/// // Create with 60 secs expiration and an initial capacity of 20 elements
+/// queue = SumQueue::with_capacity(60, 20);
+/// ```
 pub struct SumQueue<T> {
+    /// the heap with the data
     heap: BinaryHeap<QueueElement<T>>,
-    pub max_age: u64    // max age in seconds
+    /// max time in seconds the elements will
+    /// live in the queue.
+    max_age: u64
 }
 
 impl<T> SumQueue<T> {
+    /// Creates an empty `SumQueue`, where the elements inside
+    /// will live `max_age_secs` seconds at maximum.
     pub fn new(max_age_secs: u64) -> SumQueue<T> {
         SumQueue {
             heap: BinaryHeap::<QueueElement<T>>::new(),
@@ -58,6 +198,12 @@ impl<T> SumQueue<T> {
         }
     }
 
+    /// Creates an empty `SumQueue` with a specific initial capacity.
+    /// This preallocates enough memory for `capacity` elements,
+    /// so that the [BinaryHeap](https://doc.rust-lang.org/std/collections/binary_heap/struct.BinaryHeap.html)
+    /// inside the `SumQueue` does not have to be reallocated
+    /// until it contains at least that many values.
+    /// The elements inside the queue will live `max_age_secs` seconds at maximum.
     pub fn with_capacity(max_age_secs: u64, capacity: usize) -> SumQueue<T> {
         SumQueue {
             heap: BinaryHeap::<QueueElement<T>>::with_capacity(capacity),
@@ -65,6 +211,22 @@ impl<T> SumQueue<T> {
         }
     }
 
+    /// Pushes an item onto the heap of the queue.
+    ///
+    /// See [BinaryHeap::push](https://doc.rust-lang.org/std/collections/binary_heap/struct.BinaryHeap.html#method.push)
+    /// to known more about the time complexity.
+    ///
+    /// It returns the size of the queue, and before the element is pushed to the heap,
+    /// it also drops all expired elements in the queue.
+    ///
+    /// ```
+    /// use sum_queue::SumQueue;
+    /// let mut queue = SumQueue::new(60);
+    /// queue.push(1);
+    /// queue.push(5);
+    /// assert_eq!(queue.push(2), 3);
+    /// assert_eq!(queue.iter().collect::<Vec<_>>(), vec![&1, &5, &2]);
+    /// ```
     pub fn push(&mut self, item: T) -> usize {
         let now = now();
         self.clear_oldest(now);
@@ -86,25 +248,127 @@ impl<T> SumQueue<T> {
         }
     }
 
+    /// Drops all items.
     pub fn clear(&mut self) {
         self.heap.clear();
     }
 
+    /// Returns the length of the heap.
+    ///
+    /// It takes a mutable reference of `self` because
+    /// before return the size it also cleans all the
+    /// expired elements of the queue, so only
+    /// no expired elements are count.
     pub fn len(&mut self) -> usize {
         self.clear_oldest(now());
         self.heap.len()
     }
 
+    /// Checks if the heap is empty. Expired elements are not taken
+    /// into account because are droped by `is_empty()` before
+    /// return the result.
+    ///
+    /// ```
+    /// use sum_queue::SumQueue;
+    /// use std::{time, thread};
+    /// let mut queue = SumQueue::new(1);
+    ///
+    /// assert!(queue.is_empty());
+    ///
+    /// queue.push(123);
+    /// queue.push(555);
+    ///
+    /// assert!(!queue.is_empty());
+    ///
+    /// thread::sleep(time::Duration::from_secs(2));
+    ///
+    /// assert!(queue.is_empty());
+    /// ```
+    pub fn is_empty(&mut self) -> bool {
+        self.len() == 0
+    }
+
+    /// Returns the number of elements the heap can hold without reallocating.
+    ///
+    /// ```
+    /// use sum_queue::SumQueue;
+    /// let mut queue: SumQueue<char> = SumQueue::with_capacity(60, 5);
+    /// assert_eq!(queue.capacity(), 5);
+    /// assert_eq!(queue.len(), 0);
+    /// ```
+    pub fn capacity(&self) -> usize {
+        self.heap.capacity()
+    }
+
+    /// Returns the max time in seconds the elements will live in the queue.
+    ///
+    /// ```
+    /// use sum_queue::SumQueue;
+    /// let mut queue: SumQueue<char> = SumQueue::new(60);
+    /// assert_eq!(queue.max_age(), 60);
+    /// ```
+    pub fn max_age(&self) -> u64 {
+        self.max_age
+    }
+
+    /// Returns an iterator visiting all values in the underlying heap, in
+    /// arbitrary order (same order they were pushed).
+    ///
+    /// Before return the iterator, it also drops all expired elements.
+    ///
+    /// ```
+    /// use sum_queue::SumQueue;
+    /// let mut queue = SumQueue::new(60);
+    /// queue.push('a');
+    /// queue.push('z');
+    /// queue.push('x');
+    /// assert_eq!(queue.iter().collect::<Vec<_>>(), vec![&'a', &'z', &'x']);
+    /// ```
+    //TODO this implementation of `iter()` sucks, SumQueue needs to have
+    //     its own Iterator type, so the QueueElement is hidden and the
+    //     queue is not cleared unless the iterator is consumed as expected.
     pub fn iter(&mut self) -> Map<Iter<QueueElement<T>>, fn(&QueueElement<T>) -> &T> {
         self.clear_oldest(now());
         self.heap.iter().map(|x| &x.value)
     }
 
+    /// Returns the first item in the heap, or `None` if it is empty.
+    ///
+    /// Before the element is returned, it also drops all expired
+    /// elements from the queue.
+    ///
+    /// ```
+    /// use sum_queue::SumQueue;
+    /// let mut queue = SumQueue::new(60);
+    /// assert_eq!(queue.peek(), None);
+    /// queue.push("Hello");
+    /// queue.push("World");
+    /// queue.push("!");
+    /// assert_eq!(queue.peek(), Some(&"Hello"));
+    /// ```
     pub fn peek(&mut self) -> Option<&T> {
         self.clear_oldest(now());
         self.heap.peek().map( |q_element| &q_element.value)
     }
 
+    /// Removes the first item from the heap and returns it, or `None` if it
+    /// is empty.
+    ///
+    /// Before the element is dropped from the queue and returned,
+    /// it also drops all expired elements.
+    ///
+    /// ```
+    /// use sum_queue::SumQueue;
+    /// let mut queue = SumQueue::with_capacity(60, 5);
+    /// assert_eq!(queue.pop(), None);
+    /// queue.push('a');
+    /// queue.push('x');
+    /// queue.push('c');
+    /// assert_eq!(queue.pop(), Some('a'));
+    /// assert_eq!(queue.pop(), Some('x'));
+    /// assert_eq!(queue.pop(), Some('c'));
+    /// assert_eq!(queue.pop(), None);
+    /// ```
     pub fn pop(&mut self) -> Option<T> {
         self.clear_oldest(now());
         self.heap.pop().map( |q_element| q_element.value)
@@ -132,11 +396,54 @@ impl<T: Copy + Ord + Add<Output = T>> SumQueue<T> {
         }
     }
 
+    /// Get statistics of the queue. The type of the elements
+    /// on it needs to implements the `Copy`, `Ord` and `Add` traits.
+    ///
+    /// Before the stats are returned, it also drops all expired elements.
+    ///
+    /// ```
+    /// use sum_queue::SumQueue;
+    /// let mut queue: SumQueue<i64> = SumQueue::new(1000);
+    /// queue.push(-10);
+    /// queue.push(50);
+    /// queue.push(40);
+    /// queue.push(20);
+    /// let stats = queue.stats();
+    /// assert_eq!(stats.min, Some(-10));
+    /// assert_eq!(stats.max, Some(50));
+    /// assert_eq!(stats.sum, Some(100));
+    /// assert_eq!(stats.len, 4);
+    /// ```
+    ///
+    /// See also `push_and_stats`.
     pub fn stats(&mut self) -> QueueStats<T> {
         let len = self.len();
         self._stats(len)
     }
 
+    /// Pushes an item onto the heap of the queue, and returns
+    /// the stats of the queue. The type of the elements
+    /// on it need to implements the `Copy`, `Ord` and `Add`
+    /// traits.
+    ///
+    /// Before push and return the stats, it also drops all expired elements.
+    ///
+    /// ```
+    /// use sum_queue::SumQueue;
+    /// let mut queue: SumQueue<i64> = SumQueue::new(1000);
+    /// queue.push(-10);
+    /// queue.push(50);
+    /// queue.push(40);
+    /// let stats = queue.push_and_stats(20);
+    /// assert_eq!(stats.min, Some(-10));
+    /// assert_eq!(stats.max, Some(50));
+    /// assert_eq!(stats.sum, Some(100));
+    /// assert_eq!(stats.len, 4);
+    /// ```
+    ///
+    /// Use `push` instead if you don't need the stats
+    /// or the elements in the heap don't implement
+    /// any of the required traits.
     pub fn push_and_stats(&mut self, item: T) -> QueueStats<T> {
         let len = self.push(item);
         self._stats(len)
@@ -256,11 +563,12 @@ mod tests {
         queue.push(-10);
         queue.push(50);
         queue.push(20);
+        queue.push(20);
         stats = queue.stats();
         assert_eq!(stats.min, Some(-10));
         assert_eq!(stats.max, Some(50));
-        assert_eq!(stats.sum, Some(60));
-        assert_eq!(stats.len, 3);
+        assert_eq!(stats.sum, Some(80));
+        assert_eq!(stats.len, 4);
 
         queue.clear();
         stats = queue.stats();
