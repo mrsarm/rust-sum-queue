@@ -77,14 +77,12 @@
 
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
-use std::collections::binary_heap::Iter;
-use std::iter::Map;
+use std::collections::binary_heap;
 use std::ops::Add;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Internal element used by `SumQueue` to hold the values.
-// TODO make it not public once the `SumQueue` has its own Iterator
-pub struct QueueElement<T> {
+struct QueueElement<T> {
     time: u64,  // "Unix" Time, or seconds since EPOCH when the value was added
     value: T
 }
@@ -309,27 +307,6 @@ impl<T> SumQueue<T> {
         self.max_age
     }
 
-    /// Returns an iterator visiting all values in the underlying heap, in
-    /// arbitrary order (same order they were pushed).
-    ///
-    /// Before return the iterator, it also drops all expired elements.
-    ///
-    /// ```
-    /// use sum_queue::SumQueue;
-    /// let mut queue = SumQueue::new(60);
-    /// queue.push('a');
-    /// queue.push('z');
-    /// queue.push('x');
-    /// assert_eq!(queue.iter().collect::<Vec<_>>(), vec![&'a', &'z', &'x']);
-    /// ```
-    //TODO this implementation of `iter()` sucks, SumQueue needs to have
-    //     its own Iterator type, so the QueueElement is hidden and the
-    //     queue is not cleared unless the iterator is consumed as expected.
-    pub fn iter(&mut self) -> Map<Iter<QueueElement<T>>, fn(&QueueElement<T>) -> &T> {
-        self.clear_oldest(now());
-        self.heap.iter().map(|x| &x.value)
-    }
-
     /// Returns the first item in the heap, or `None` if it is empty.
     ///
     /// Before the element is returned, it also drops all expired
@@ -370,6 +347,29 @@ impl<T> SumQueue<T> {
     pub fn pop(&mut self) -> Option<T> {
         self.clear_oldest(now());
         self.heap.pop().map( |q_element| q_element.value)
+    }
+
+    /// Returns an iterator visiting all values in the underlying heap, in
+    /// same order they were pushed.
+    ///
+    /// Before return the iterator, it also drops all expired elements.
+    ///
+    /// The iterator does not change the state of the queue, this
+    /// method takes ownership of the queue because as mentioned above
+    /// it clears the expired elements before return the iterator, even
+    /// if the iterator is not consumed later on.
+    ///
+    /// ```
+    /// use sum_queue::SumQueue;
+    /// let mut queue = SumQueue::new(60);
+    /// queue.push('a');
+    /// queue.push('z');
+    /// queue.push('x');
+    /// assert_eq!(queue.iter().collect::<Vec<_>>(), vec![&'a', &'z', &'x']);
+    /// ```
+    pub fn iter(&mut self) -> Iter<'_, T> {
+        self.clear_oldest(now());
+        Iter { iter: self.heap.iter() }
     }
 }
 
@@ -445,6 +445,23 @@ impl<T: Copy + Ord + Add<Output = T>> SumQueue<T> {
     pub fn push_and_stats(&mut self, item: T) -> QueueStats<T> {
         let len = self.push(item);
         self._stats(len)
+    }
+}
+
+/// An iterator over the elements of a `SumQueue`.
+///
+/// This `struct` is created by [`SumQueue::iter()`]. See its
+/// documentation for more.
+pub struct Iter<'a, T: 'a> {
+    iter: binary_heap::Iter<'a, QueueElement<T>>,
+}
+
+impl<'a, T> Iterator for Iter<'a, T> {
+    type Item = &'a T;
+
+    fn next(&mut self) -> Option<&'a T> {
+        let element = self.iter.next()?;
+        Some(&element.value)
     }
 }
 
