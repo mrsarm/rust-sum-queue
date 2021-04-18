@@ -9,7 +9,7 @@
 //! use sum_queue::SumQueue;
 //! use std::{time, thread};
 //! 
-//! // creates a queue where elements expires after 2 seconds
+//! // creates a queue where elements expire after 2 seconds
 //! let mut queue: SumQueue<i32> = SumQueue::new(2);
 //! queue.push(1);
 //! queue.push(10);
@@ -27,7 +27,7 @@
 //! queue.push(1);
 //! queue.push(5);
 //! queue.push(2);
-//! // Elements can be iterated as many times you want
+//! // Elements can be iterated as many times as you want
 //! println!("heap data: {:?}", queue.iter().collect::<Vec<_>>());  // [1, 5, 2]
 //! 
 //! // Check stats
@@ -58,8 +58,8 @@
 //!
 //! ## Implementation
 //!
-//! Underneath uses a [BinaryHeap](https://doc.rust-lang.org/std/collections/binary_heap/struct.BinaryHeap.html)
-//! struct to keep the values, and implements the same methods: `push()`, `pop()`, `peek()` ...
+//! Underneath uses a [`BinaryHeap`] struct to keep the values,
+//! and implements the same methods: `push()`, `pop()`, `peek()` ...
 //! although worth to note that the implementations of the `SumQueue` type take mutable
 //! ownership of the `self` reference (eg. `peek(&mut self) -> Option<&T>`). That is
 //! because the cleaning of the expired elements of the queue occurs each time
@@ -91,17 +91,17 @@ pub struct QueueElement<T> {
 
 /// Stats of the queue.
 ///
-/// It provides the following statistics: min and max value
-/// in the queue, the sum of all the values and the length
+/// It provides the following statistics: **min** and **max** value
+/// in the queue, the **sum** of all the values and the **length**
 /// of all elements hold in the queue.
 ///
-/// All the values resturned only take into account
+/// The values are computed taking into account only
 /// the existent elements in the queue, and not past
 /// elements removed because expiration or because
-/// removed.
+/// they were removed.
 ///
 /// You can get the stats object calling to
-/// the `stats()` method of the queue:
+/// the [`SumQueue::stats()`] method of the queue:
 ///
 /// ```
 /// use sum_queue::SumQueue;
@@ -117,7 +117,7 @@ pub struct QueueElement<T> {
 /// ```
 ///
 /// But you can also get the stats
-/// while pushing elements, which it is more
+/// while pushing elements, which it's more
 /// effecient than push and then get the stats:
 ///
 /// ```
@@ -138,7 +138,7 @@ pub struct QueueStats<T: Ord + Add<Output = T>> {
     pub max: Option<T>,
     /// sum of all the values in the queue
     pub sum: Option<T>,
-    /// size of the queue, same than `queue.len()`
+    /// size of the queue, same than [`SumQueue::len()`]
     pub len: usize
 }
 
@@ -200,9 +200,8 @@ impl<T> SumQueue<T> {
 
     /// Creates an empty `SumQueue` with a specific initial capacity.
     /// This preallocates enough memory for `capacity` elements,
-    /// so that the [BinaryHeap](https://doc.rust-lang.org/std/collections/binary_heap/struct.BinaryHeap.html)
-    /// inside the `SumQueue` does not have to be reallocated
-    /// until it contains at least that many values.
+    /// so that the [`BinaryHeap`] inside the `SumQueue` does not have
+    /// to be reallocated until it contains at least that many values.
     /// The elements inside the queue will live `max_age_secs` seconds at maximum.
     pub fn with_capacity(max_age_secs: u64, capacity: usize) -> SumQueue<T> {
         SumQueue {
@@ -213,8 +212,7 @@ impl<T> SumQueue<T> {
 
     /// Pushes an item onto the heap of the queue.
     ///
-    /// See [BinaryHeap::push](https://doc.rust-lang.org/std/collections/binary_heap/struct.BinaryHeap.html#method.push)
-    /// to known more about the time complexity.
+    /// See [`BinaryHeap::push`] to known more about the time complexity.
     ///
     /// It returns the size of the queue, and before the element is pushed to the heap,
     /// it also drops all expired elements in the queue.

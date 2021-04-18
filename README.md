@@ -1,7 +1,7 @@
 sum-queue
 =========
 
-`SumQueue` it's a **Rust** :crab: queue type that keeps a fixed number of
+`SumQueue` it's a **Rust** queue type that keeps a fixed number of
 items by time, not capacity, similar to a cache, but with a simpler
 and faster implementation. It also allows to get summarized stats
 of the values on it at any time.
@@ -12,7 +12,7 @@ of the values on it at any time.
 use sum_queue::SumQueue;
 use std::{time, thread};
 
-// creates a queue where elements expires after 2 seconds
+// creates a queue where elements expire after 2 seconds
 let mut queue: SumQueue<i32> = SumQueue::new(2);
 queue.push(1);
 queue.push(10);
@@ -30,7 +30,7 @@ assert_eq!(queue.pop(), None);
 queue.push(1);
 queue.push(5);
 queue.push(2);
-// Elements can be iterated as many times you want
+// Elements can be iterated as many times as you want
 println!("heap data: {:?}", queue.iter().collect::<Vec<_>>());  // [1, 5, 2]
 
 // Check stats
@@ -83,7 +83,7 @@ deallocate the expired elements.
 
 **Source**: https://github.com/mrsarm/rust-sum-queue
 
-**Authors**: (2020) Mariano Ruiz <mrsarm@gmail.com>
+**Authors**: (2020-2021) Mariano Ruiz <mrsarm@gmail.com>
 
 **Documentation**: https://docs.rs/sum-queue/
 
