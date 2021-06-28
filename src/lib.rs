@@ -79,11 +79,11 @@ use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use std::collections::binary_heap;
 use std::ops::Add;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Instant, Duration};
 
 /// Internal element used by `SumQueue` to hold the values.
 struct QueueElement<T> {
-    time: u64,  // "Unix" Time, or seconds since EPOCH when the value was added
+    time: Instant,
     value: T
 }
 
@@ -160,9 +160,8 @@ impl<T> PartialOrd for QueueElement<T> {
     }
 }
 
-fn now() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH)
-        .expect("<-- Time went backwards").as_secs()
+fn now() -> Instant {
+    Instant::now()
 }
 
 /// Main struct that holds the queue of elements.
@@ -183,7 +182,7 @@ pub struct SumQueue<T> {
     heap: BinaryHeap<QueueElement<T>>,
     /// max time in seconds the elements will
     /// live in the queue.
-    max_age: u64
+    max_age: Duration,
 }
 
 impl<T> SumQueue<T> {
@@ -192,7 +191,7 @@ impl<T> SumQueue<T> {
     pub fn new(max_age_secs: u64) -> SumQueue<T> {
         SumQueue {
             heap: BinaryHeap::<QueueElement<T>>::new(),
-            max_age: max_age_secs
+            max_age: Duration::from_secs(max_age_secs),
         }
     }
 
@@ -204,7 +203,7 @@ impl<T> SumQueue<T> {
     pub fn with_capacity(max_age_secs: u64, capacity: usize) -> SumQueue<T> {
         SumQueue {
             heap: BinaryHeap::<QueueElement<T>>::with_capacity(capacity),
-            max_age: max_age_secs
+            max_age: Duration::from_secs(max_age_secs),
         }
     }
 
@@ -233,7 +232,7 @@ impl<T> SumQueue<T> {
         self.heap.len()
     }
 
-    fn clear_oldest(&mut self, now: u64) {
+    fn clear_oldest(&mut self, now: Instant) {
         while let Some(el) = self.heap.peek() {
             let peek_age = now - el.time;
             if peek_age > self.max_age {
@@ -304,7 +303,7 @@ impl<T> SumQueue<T> {
     /// assert_eq!(queue.max_age(), 60);
     /// ```
     pub fn max_age(&self) -> u64 {
-        self.max_age
+        self.max_age.as_secs()
     }
 
     /// Returns the first item in the heap, or `None` if it is empty.
@@ -556,7 +555,7 @@ mod tests {
         assert_eq!(queue.iter().collect::<Vec<_>>(), vec![&1, &5, &2, &50]);
         println!("Same elements + 50: {:?}", queue.iter().collect::<Vec<_>>());
 
-        sleep_secs(2);
+        sleep_secs(1);
         assert_eq!(queue.iter().collect::<Vec<_>>(), vec![&50]);
         println!("Expired original list, only 50 in the list: {:?}",
                  queue.iter().collect::<Vec<_>>());
