@@ -9,11 +9,12 @@ of the values on it at any time.
 ## Examples
 
 ```rust
+use std::time::Duration;
+use std::thread;
 use sum_queue::SumQueue;
-use std::{time, thread};
 
 // creates a queue where elements expire after 2 seconds
-let mut queue: SumQueue<i32> = SumQueue::new(2);
+let mut queue: SumQueue<i32> = SumQueue::new(Duration::from_secs(2));
 queue.push(1);
 queue.push(10);
 queue.push(3);
@@ -42,20 +43,21 @@ println!("Stats - length of queue: {}", stats.len);                     // 3
 
 assert_eq!(queue.pop(), Some(1));
 assert_eq!(queue.iter().collect::<Vec<_>>(), vec![&5, &2]);
+println!("Elements after pop: {:?}", queue.iter().collect::<Vec<_>>()); // [5, 2]
 
 // After a second the elements are still the same
-thread::sleep(time::Duration::from_secs(1));
-println!("Same elements: {:?}", queue.iter().collect::<Vec<_>>());      // [5, 2]
+thread::sleep(Duration::from_secs(1));
+println!("Same after 1 sec: {:?}", queue.iter().collect::<Vec<_>>());   // [5, 2]
 
 queue.push(50); // Add an element 1 second younger than the rest of elements
 println!("Same elements + 50: {:?}", queue.iter().collect::<Vec<_>>()); // [5, 2, 50]
 
-// Now let sleep 2 secs so the first elements expire
-thread::sleep(time::Duration::from_secs(2));
+// Now let sleep 1 sec so the first elements expire
+thread::sleep(Duration::from_secs(1));
 println!("Just 50: {:?}", queue.iter().collect::<Vec<_>>());            // [50]
 
-// 2 seconds later the last element also expires
-thread::sleep(time::Duration::from_secs(2));
+// 1 second more later the last element also expires
+thread::sleep(Duration::from_secs(1));
 println!("No elements: {:?}", queue.iter().collect::<Vec<_>>());        // []
 ```
 
