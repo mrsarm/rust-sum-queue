@@ -6,16 +6,16 @@
 //! ## Examples
 //! 
 //! ```
-//! use sum_queue::SumQueue;
 //! use std::time::Duration;
 //! use std::thread;
-//! 
+//! use sum_queue::SumQueue;
+//!
 //! // creates a queue where elements expire after 2 seconds
 //! let mut queue: SumQueue<i32> = SumQueue::new(Duration::from_secs(2));
 //! queue.push(1);
 //! queue.push(10);
 //! queue.push(3);
-//! 
+//!
 //! // Check the peek without removing the element
 //! assert_eq!(queue.peek(), Some(&1));
 //! // elements are removed in the same order were pushed
@@ -30,30 +30,31 @@
 //! queue.push(2);
 //! // Elements can be iterated as many times as you want
 //! println!("heap data: {:?}", queue.iter().collect::<Vec<_>>());  // [1, 5, 2]
-//! 
+//!
 //! // Check stats
 //! let stats = queue.stats();
 //! println!("Stats - min value in queue: {}", stats.min.unwrap());         // 1
 //! println!("Stats - max value in queue: {}", stats.max.unwrap());         // 5
 //! println!("Stats - sum all values in queue: {}", stats.sum.unwrap());    // 8
 //! println!("Stats - length of queue: {}", stats.len);                     // 3
-//! 
+//!
 //! assert_eq!(queue.pop(), Some(1));
 //! assert_eq!(queue.iter().collect::<Vec<_>>(), vec![&5, &2]);
-//! 
+//! println!("Elements after pop: {:?}", queue.iter().collect::<Vec<_>>()); // [5, 2]
+//!
 //! // After a second the elements are still the same
 //! thread::sleep(Duration::from_secs(1));
-//! println!("Same elements: {:?}", queue.iter().collect::<Vec<_>>());      // [5, 2]
-//! 
+//! println!("Same after 1 sec: {:?}", queue.iter().collect::<Vec<_>>());   // [5, 2]
+//!
 //! queue.push(50); // Add an element 1 second younger than the rest of elements
 //! println!("Same elements + 50: {:?}", queue.iter().collect::<Vec<_>>()); // [5, 2, 50]
-//! 
-//! // Now let sleep 2 secs so the first elements expire
-//! thread::sleep(Duration::from_secs(2));
+//!
+//! // Now let sleep 1 sec so the first elements expire
+//! thread::sleep(Duration::from_secs(1));
 //! println!("Just 50: {:?}", queue.iter().collect::<Vec<_>>());            // [50]
-//! 
-//! // 2 seconds later the last element also expires
-//! thread::sleep(Duration::from_secs(2));
+//!
+//! // 1 second more later the last element also expires
+//! thread::sleep(Duration::from_secs(1));
 //! println!("No elements: {:?}", queue.iter().collect::<Vec<_>>());        // []
 //! ```
 //!
@@ -614,19 +615,24 @@ mod tests {
     }
 
     #[test]
-    fn stats() {
-        let mut queue: SumQueue<i64> = SumQueue::new(Duration::from_secs(1000));
-        let mut stats = queue.stats();
+    fn stats_empty_when_queue_not_initialized() {
+        let mut queue: SumQueue<i64> = SumQueue::new(Duration::from_millis(9000));
+        let stats = queue.stats();
         assert_eq!(stats.min, None);
         assert_eq!(stats.max, None);
         assert_eq!(stats.sum, None);
         assert_eq!(stats.len, 0);
+    }
 
+    #[test]
+    fn stats() {
+        let mut queue: SumQueue<i64> = SumQueue::new(Duration::from_secs(1000));
         queue.push(-10);
         queue.push(50);
         queue.push(20);
         queue.push(20);
-        stats = queue.stats();
+
+        let mut stats = queue.stats();
         assert_eq!(stats.min, Some(-10));
         assert_eq!(stats.max, Some(50));
         assert_eq!(stats.sum, Some(80));
