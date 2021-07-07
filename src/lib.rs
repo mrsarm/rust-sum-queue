@@ -6,15 +6,16 @@
 //! ## Examples
 //! 
 //! ```
+//! use std::time::Duration;
+//! use std::thread;
 //! use sum_queue::SumQueue;
-//! use std::{time, thread};
-//! 
+//!
 //! // creates a queue where elements expire after 2 seconds
-//! let mut queue: SumQueue<i32> = SumQueue::new(2);
+//! let mut queue: SumQueue<i32> = SumQueue::new(Duration::from_secs(2));
 //! queue.push(1);
 //! queue.push(10);
 //! queue.push(3);
-//! 
+//!
 //! // Check the peek without removing the element
 //! assert_eq!(queue.peek(), Some(&1));
 //! // elements are removed in the same order were pushed
@@ -29,30 +30,31 @@
 //! queue.push(2);
 //! // Elements can be iterated as many times as you want
 //! println!("heap data: {:?}", queue.iter().collect::<Vec<_>>());  // [1, 5, 2]
-//! 
+//!
 //! // Check stats
 //! let stats = queue.stats();
 //! println!("Stats - min value in queue: {}", stats.min.unwrap());         // 1
 //! println!("Stats - max value in queue: {}", stats.max.unwrap());         // 5
 //! println!("Stats - sum all values in queue: {}", stats.sum.unwrap());    // 8
 //! println!("Stats - length of queue: {}", stats.len);                     // 3
-//! 
+//!
 //! assert_eq!(queue.pop(), Some(1));
 //! assert_eq!(queue.iter().collect::<Vec<_>>(), vec![&5, &2]);
-//! 
+//! println!("Elements after pop: {:?}", queue.iter().collect::<Vec<_>>()); // [5, 2]
+//!
 //! // After a second the elements are still the same
-//! thread::sleep(time::Duration::from_secs(1));
-//! println!("Same elements: {:?}", queue.iter().collect::<Vec<_>>());      // [5, 2]
-//! 
+//! thread::sleep(Duration::from_secs(1));
+//! println!("Same after 1 sec: {:?}", queue.iter().collect::<Vec<_>>());   // [5, 2]
+//!
 //! queue.push(50); // Add an element 1 second younger than the rest of elements
 //! println!("Same elements + 50: {:?}", queue.iter().collect::<Vec<_>>()); // [5, 2, 50]
-//! 
-//! // Now let sleep 2 secs so the first elements expire
-//! thread::sleep(time::Duration::from_secs(2));
+//!
+//! // Now let sleep 1 sec so the first elements expire
+//! thread::sleep(Duration::from_secs(1));
 //! println!("Just 50: {:?}", queue.iter().collect::<Vec<_>>());            // [50]
-//! 
-//! // 2 seconds later the last element also expires
-//! thread::sleep(time::Duration::from_secs(2));
+//!
+//! // 1 second more later the last element also expires
+//! thread::sleep(Duration::from_secs(1));
 //! println!("No elements: {:?}", queue.iter().collect::<Vec<_>>());        // []
 //! ```
 //!
@@ -102,8 +104,9 @@ struct QueueElement<T> {
 /// the [`SumQueue::stats()`] method of the queue:
 ///
 /// ```
+/// use std::time::Duration;
 /// use sum_queue::SumQueue;
-/// let mut queue = SumQueue::new(1000);
+/// let mut queue = SumQueue::new(Duration::from_millis(800));
 /// queue.push(-1);
 /// queue.push(5);
 /// queue.push(2);
@@ -116,11 +119,12 @@ struct QueueElement<T> {
 ///
 /// But you can also get the stats
 /// while pushing elements, which it's more
-/// effecient than push and then get the stats:
+/// efficient than push and then get the stats:
 ///
 /// ```
+/// use std::time::Duration;
 /// use sum_queue::SumQueue;
-/// let mut queue = SumQueue::new(1000);
+/// let mut queue = SumQueue::new(Duration::from_secs(1000));
 /// queue.push(-1);
 /// queue.push(5);
 /// let stats = queue.push_and_stats(2);
@@ -169,29 +173,31 @@ fn now() -> Instant {
 /// There are different ways to create the queue:
 ///
 /// ```
+/// use std::time::Duration;
 /// use sum_queue::SumQueue;
+///
 /// let mut queue: SumQueue<i32>;
 ///
 /// // Create a queue with elements that expires after 60 seconds
-/// queue = SumQueue::new(60);
-/// // Create with 60 secs expiration and an initial capacity of 20 elements
-/// queue = SumQueue::with_capacity(60, 20);
+/// queue = SumQueue::new(Duration::from_secs(60));
+/// // Create with 500 milliseconds expiration and an initial capacity of 20 elements
+/// queue = SumQueue::with_capacity(Duration::from_millis(500), 20);
 /// ```
 pub struct SumQueue<T> {
     /// the heap with the data
     heap: BinaryHeap<QueueElement<T>>,
-    /// max time in seconds the elements will
+    /// max time the elements will
     /// live in the queue.
     max_age: Duration,
 }
 
 impl<T> SumQueue<T> {
     /// Creates an empty `SumQueue`, where the elements inside
-    /// will live `max_age_secs` seconds at maximum.
-    pub fn new(max_age_secs: u64) -> SumQueue<T> {
+    /// will live `max_age_duration` at maximum.
+    pub fn new(max_age_duration: Duration) -> SumQueue<T> {
         SumQueue {
             heap: BinaryHeap::<QueueElement<T>>::new(),
-            max_age: Duration::from_secs(max_age_secs),
+            max_age: max_age_duration,
         }
     }
 
@@ -199,11 +205,11 @@ impl<T> SumQueue<T> {
     /// This preallocates enough memory for `capacity` elements,
     /// so that the [`BinaryHeap`] inside the `SumQueue` does not have
     /// to be reallocated until it contains at least that many values.
-    /// The elements inside the queue will live `max_age_secs` seconds at maximum.
-    pub fn with_capacity(max_age_secs: u64, capacity: usize) -> SumQueue<T> {
+    /// The elements inside the queue will live `max_age_duration` time at maximum.
+    pub fn with_capacity(max_age_duration: Duration, capacity: usize) -> SumQueue<T> {
         SumQueue {
             heap: BinaryHeap::<QueueElement<T>>::with_capacity(capacity),
-            max_age: Duration::from_secs(max_age_secs),
+            max_age: max_age_duration,
         }
     }
 
@@ -215,8 +221,9 @@ impl<T> SumQueue<T> {
     /// it also drops all expired elements in the queue.
     ///
     /// ```
+    /// use std::time::Duration;
     /// use sum_queue::SumQueue;
-    /// let mut queue = SumQueue::new(60);
+    /// let mut queue = SumQueue::new(Duration::from_secs(60));
     /// queue.push(1);
     /// queue.push(5);
     /// assert_eq!(queue.push(2), 3);
@@ -264,9 +271,10 @@ impl<T> SumQueue<T> {
     /// return the result.
     ///
     /// ```
+    /// use std::time::Duration;
+    /// use std::thread;
     /// use sum_queue::SumQueue;
-    /// use std::{time, thread};
-    /// let mut queue = SumQueue::new(1);
+    /// let mut queue = SumQueue::new(Duration::from_millis(600));
     ///
     /// assert!(queue.is_empty());
     ///
@@ -275,7 +283,7 @@ impl<T> SumQueue<T> {
     ///
     /// assert!(!queue.is_empty());
     ///
-    /// thread::sleep(time::Duration::from_secs(2));
+    /// thread::sleep(Duration::from_secs(1));
     ///
     /// assert!(queue.is_empty());
     /// ```
@@ -286,8 +294,9 @@ impl<T> SumQueue<T> {
     /// Returns the number of elements the heap can hold without reallocating.
     ///
     /// ```
+    /// use std::time::Duration;
     /// use sum_queue::SumQueue;
-    /// let mut queue: SumQueue<char> = SumQueue::with_capacity(60, 5);
+    /// let mut queue: SumQueue<char> = SumQueue::with_capacity(Duration::from_secs(60), 5);
     /// assert_eq!(queue.capacity(), 5);
     /// assert_eq!(queue.len(), 0);
     /// ```
@@ -295,15 +304,16 @@ impl<T> SumQueue<T> {
         self.heap.capacity()
     }
 
-    /// Returns the max time in seconds the elements will live in the queue.
+    /// Returns the max time the elements will live in the queue.
     ///
     /// ```
+    /// use std::time::Duration;
     /// use sum_queue::SumQueue;
-    /// let mut queue: SumQueue<char> = SumQueue::new(60);
-    /// assert_eq!(queue.max_age(), 60);
+    /// let mut queue: SumQueue<char> = SumQueue::new(Duration::from_secs(60));
+    /// assert_eq!(queue.max_age().as_secs(), 60);
     /// ```
-    pub fn max_age(&self) -> u64 {
-        self.max_age.as_secs()
+    pub fn max_age(&self) -> Duration {
+        self.max_age
     }
 
     /// Returns the first item in the heap, or `None` if it is empty.
@@ -312,8 +322,9 @@ impl<T> SumQueue<T> {
     /// elements from the queue.
     ///
     /// ```
+    /// use std::time::Duration;
     /// use sum_queue::SumQueue;
-    /// let mut queue = SumQueue::new(60);
+    /// let mut queue = SumQueue::new(Duration::from_secs(60));
     /// assert_eq!(queue.peek(), None);
     /// queue.push("Hello");
     /// queue.push("World");
@@ -332,8 +343,9 @@ impl<T> SumQueue<T> {
     /// it also drops all expired elements.
     ///
     /// ```
+    /// use std::time::Duration;
     /// use sum_queue::SumQueue;
-    /// let mut queue = SumQueue::with_capacity(60, 5);
+    /// let mut queue = SumQueue::with_capacity(Duration::from_secs(60), 5);
     /// assert_eq!(queue.pop(), None);
     /// queue.push('a');
     /// queue.push('x');
@@ -359,8 +371,9 @@ impl<T> SumQueue<T> {
     /// if the iterator is not consumed later on.
     ///
     /// ```
+    /// use std::time::Duration;
     /// use sum_queue::SumQueue;
-    /// let mut queue = SumQueue::new(60);
+    /// let mut queue = SumQueue::new(Duration::from_secs(60));
     /// queue.push('a');
     /// queue.push('z');
     /// queue.push('x');
@@ -399,8 +412,9 @@ impl<T: Copy + Ord + Add<Output = T>> SumQueue<T> {
     /// Before the stats are returned, it also drops all expired elements.
     ///
     /// ```
+    /// use std::time::Duration;
     /// use sum_queue::SumQueue;
-    /// let mut queue: SumQueue<i64> = SumQueue::new(1000);
+    /// let mut queue: SumQueue<i64> = SumQueue::new(Duration::from_secs(1000));
     /// queue.push(-10);
     /// queue.push(50);
     /// queue.push(40);
@@ -426,8 +440,9 @@ impl<T: Copy + Ord + Add<Output = T>> SumQueue<T> {
     /// Before push and return the stats, it also drops all expired elements.
     ///
     /// ```
+    /// use std::time::Duration;
     /// use sum_queue::SumQueue;
-    /// let mut queue: SumQueue<i64> = SumQueue::new(1000);
+    /// let mut queue: SumQueue<i64> = SumQueue::new(Duration::from_secs(1000));
     /// queue.push(-10);
     /// queue.push(50);
     /// queue.push(40);
@@ -471,7 +486,7 @@ mod tests {
 
     #[test]
     fn push_pop_peek() {
-        let mut queue: SumQueue<i32> = SumQueue::new(60);
+        let mut queue: SumQueue<i32> = SumQueue::new(Duration::from_secs(60));
         queue.push(1);
         queue.push(5);
         assert_eq!(queue.push(2), 3);  // push return queue length
@@ -488,7 +503,7 @@ mod tests {
 
     #[test]
     fn push_pop_peek_refs() {
-        let mut queue: SumQueue<&i32> = SumQueue::new(60);
+        let mut queue: SumQueue<&i32> = SumQueue::new(Duration::from_secs(60));
         queue.push(&1);
         queue.push(&5);
         assert_eq!(queue.push(&2), 3);
@@ -505,7 +520,8 @@ mod tests {
 
     #[test]
     fn len_clear() {
-        let mut queue: SumQueue<char> = SumQueue::with_capacity(60, 2); // small capacity shouldn't be a problem
+        let mut queue: SumQueue<char> =SumQueue::with_capacity(
+            Duration::from_secs(60), 2); // small capacity shouldn't be a problem
         assert_eq!(queue.len(), 0);
         queue.push('a');
         queue.push('b');
@@ -521,7 +537,8 @@ mod tests {
 
     #[test]
     fn iter() {
-        let mut queue: SumQueue<&str> = SumQueue::with_capacity(60, 20);
+        let mut queue: SumQueue<&str> = SumQueue::with_capacity(
+            Duration::from_secs(60), 20);
         queue.push("Hey");
         queue.push("You");
         queue.push("!");
@@ -538,7 +555,8 @@ mod tests {
     #[test]
     fn expire() {
         let max_age_secs = 2;
-        let mut queue: SumQueue<i32> = SumQueue::with_capacity(max_age_secs, 20);
+        let mut queue: SumQueue<i32> = SumQueue::with_capacity(
+            Duration::from_secs(max_age_secs), 20);
         queue.push(1);
         queue.push(5);
         queue.push(2);
@@ -566,19 +584,55 @@ mod tests {
     }
 
     #[test]
-    fn stats() {
-        let mut queue: SumQueue<i64> = SumQueue::new(1000);
-        let mut stats = queue.stats();
+    fn expire_less_one_sec() {
+        let max_age_millis = 200;
+        let mut queue: SumQueue<i32> = SumQueue::with_capacity(
+            Duration::from_millis(max_age_millis), 20);
+        queue.push(1);
+        queue.push(5);
+        queue.push(2);
+        assert_eq!(queue.iter().collect::<Vec<_>>(), vec![&1, &5, &2]);
+        println!("Elements in queue with max age of {} millis: {:?}",
+                 max_age_millis, queue.iter().collect::<Vec<_>>());
+
+        sleep_millis(100);
+        assert_eq!(queue.iter().collect::<Vec<_>>(), vec![&1, &5, &2]);
+        println!("No expiration yet, same elements: {:?}", queue.iter().collect::<Vec<_>>());
+
+        println!("\nAdding element 50 ...");
+        queue.push(50);
+        assert_eq!(queue.iter().collect::<Vec<_>>(), vec![&1, &5, &2, &50]);
+        println!("Same elements + 50: {:?}", queue.iter().collect::<Vec<_>>());
+
+        sleep_millis(100);
+        assert_eq!(queue.iter().collect::<Vec<_>>(), vec![&50]);
+        println!("Expired original list, only 50 in the list: {:?}",
+                 queue.iter().collect::<Vec<_>>());
+
+        sleep_millis(200);
+        assert_eq!(queue.iter().collect::<Vec<_>>().len(), 0);
+        println!("No elements kept: {:?}", queue.iter().collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn stats_empty_when_queue_not_initialized() {
+        let mut queue: SumQueue<i64> = SumQueue::new(Duration::from_millis(9000));
+        let stats = queue.stats();
         assert_eq!(stats.min, None);
         assert_eq!(stats.max, None);
         assert_eq!(stats.sum, None);
         assert_eq!(stats.len, 0);
+    }
 
+    #[test]
+    fn stats() {
+        let mut queue: SumQueue<i64> = SumQueue::new(Duration::from_secs(1000));
         queue.push(-10);
         queue.push(50);
         queue.push(20);
         queue.push(20);
-        stats = queue.stats();
+
+        let mut stats = queue.stats();
         assert_eq!(stats.min, Some(-10));
         assert_eq!(stats.max, Some(50));
         assert_eq!(stats.sum, Some(80));
@@ -610,5 +664,11 @@ mod tests {
     fn sleep_secs(dur_secs: u64) {
         println!("\nSleeping {} secs ...", dur_secs);
         thread::sleep(Duration::from_secs(dur_secs));
+    }
+
+    #[cfg(test)]
+    fn sleep_millis(dur_millis: u64) {
+        println!("\nSleeping {} millis ...", dur_millis);
+        thread::sleep(Duration::from_millis(dur_millis));
     }
 }
