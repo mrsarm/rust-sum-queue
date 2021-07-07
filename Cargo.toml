@@ -1,6 +1,6 @@
 [package]
 name = "sum-queue"
-version = "0.2.0"
+version = "1.0.0"
 authors = ["Mariano Ruiz <mrsarm@gmail.com>"]
 edition = "2018"
 description = "Queue struct that keeps a fixed number of items by time, not capacity, and allows to get summarized stats of its content"
