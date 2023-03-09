@@ -2,9 +2,9 @@
 //! items by time, not capacity, similar to a cache, but with a simpler
 //! and faster implementation. It also allows to get summarized stats
 //! of the values on it at any time.
-//! 
+//!
 //! ## Examples
-//! 
+//!
 //! ```
 //! use std::time::Duration;
 //! use std::thread;
@@ -78,15 +78,15 @@
 //! deallocate the expired elements.
 
 use std::cmp::Ordering;
-use std::collections::BinaryHeap;
 use std::collections::binary_heap;
+use std::collections::BinaryHeap;
 use std::ops::Add;
-use std::time::{Instant, Duration};
+use std::time::{Duration, Instant};
 
 /// Internal element used by `SumQueue` to hold the values.
 struct QueueElement<T> {
     time: Instant,
-    value: T
+    value: T,
 }
 
 /// Stats of the queue.
@@ -141,7 +141,7 @@ pub struct QueueStats<T: Ord + Add<Output = T>> {
     /// sum of all the values in the queue
     pub sum: Option<T>,
     /// size of the queue, same than [`SumQueue::len()`]
-    pub len: usize
+    pub len: usize,
 }
 
 impl<T> PartialEq for QueueElement<T> {
@@ -234,7 +234,7 @@ impl<T> SumQueue<T> {
         self.clear_oldest(now);
         self.heap.push(QueueElement {
             time: now,
-            value: item
+            value: item,
         });
         self.heap.len()
     }
@@ -333,7 +333,7 @@ impl<T> SumQueue<T> {
     /// ```
     pub fn peek(&mut self) -> Option<&T> {
         self.clear_oldest(now());
-        self.heap.peek().map( |q_element| &q_element.value)
+        self.heap.peek().map(|q_element| &q_element.value)
     }
 
     /// Removes the first item from the heap and returns it, or `None` if it
@@ -357,7 +357,7 @@ impl<T> SumQueue<T> {
     /// ```
     pub fn pop(&mut self) -> Option<T> {
         self.clear_oldest(now());
-        self.heap.pop().map( |q_element| q_element.value)
+        self.heap.pop().map(|q_element| q_element.value)
     }
 
     /// Returns an iterator visiting all values in the underlying heap, in
@@ -381,29 +381,30 @@ impl<T> SumQueue<T> {
     /// ```
     pub fn iter(&mut self) -> Iter<'_, T> {
         self.clear_oldest(now());
-        Iter { iter: self.heap.iter() }
+        Iter {
+            iter: self.heap.iter(),
+        }
     }
 }
 
 impl<T: Copy + Ord + Add<Output = T>> SumQueue<T> {
-
     fn _stats(&mut self, len: usize) -> QueueStats<T> {
-        let mut min = None; let mut max = None; let mut sum = None;
+        let mut min = None;
+        let mut max = None;
+        let mut sum = None;
         for i in self.heap.iter().map(|x| x.value) {
-            if min == None || Some(i) < min {
+            if min.is_none() || Some(i) < min {
                 min = Some(i);
             }
-            if max == None || Some(i) > max {
+            if max.is_none() || Some(i) > max {
                 max = Some(i);
             }
             sum = match sum {
                 Some(s) => Some(s + i),
-                None => Some(i)
+                None => Some(i),
             };
         }
-        QueueStats {
-            min, max, sum, len
-        }
+        QueueStats { min, max, sum, len }
     }
 
     /// Get statistics of the queue. The type of the elements
@@ -480,18 +481,18 @@ impl<'a, T> Iterator for Iter<'a, T> {
 }
 
 mod tests {
+    pub use crate::SumQueue;
     pub use std::thread;
     pub use std::time::Duration;
-    pub use crate::SumQueue;
 
     #[test]
     fn push_pop_peek() {
         let mut queue: SumQueue<i32> = SumQueue::new(Duration::from_secs(60));
         queue.push(1);
         queue.push(5);
-        assert_eq!(queue.push(2), 3);  // push return queue length
+        assert_eq!(queue.push(2), 3); // push return queue length
         assert_eq!(queue.peek(), Some(&1));
-        assert_eq!(queue.peek(), Some(&1));  // still the same
+        assert_eq!(queue.peek(), Some(&1)); // still the same
         assert_eq!(queue.pop(), Some(1));
         assert_eq!(queue.pop(), Some(5));
         assert_eq!(queue.pop(), Some(2));
@@ -520,8 +521,8 @@ mod tests {
 
     #[test]
     fn len_clear() {
-        let mut queue: SumQueue<char> =SumQueue::with_capacity(
-            Duration::from_secs(60), 2); // small capacity shouldn't be a problem
+        // small capacity shouldn't be a problem
+        let mut queue: SumQueue<char> = SumQueue::with_capacity(Duration::from_secs(60), 2);
         assert_eq!(queue.len(), 0);
         queue.push('a');
         queue.push('b');
@@ -537,16 +538,19 @@ mod tests {
 
     #[test]
     fn iter() {
-        let mut queue: SumQueue<&str> = SumQueue::with_capacity(
-            Duration::from_secs(60), 20);
+        let mut queue: SumQueue<&str> = SumQueue::with_capacity(Duration::from_secs(60), 20);
         queue.push("Hey");
         queue.push("You");
         queue.push("!");
-        println!("heap data with &str references: {:?}", queue.iter().collect::<Vec<_>>());
+        println!(
+            "heap data with &str references: {:?}",
+            queue.iter().collect::<Vec<_>>()
+        );
         // data can be iterated as many time as you want
         assert_eq!(queue.iter().collect::<Vec<_>>(), vec![&"Hey", &"You", &"!"]);
         print!("heap data, iterate one by one... :");
-        for word in queue.iter() {  // iterate one by one don't crash
+        for word in queue.iter() {
+            // iterate one by one don't crash
             print!(" {}", word)
         }
         println!();
@@ -555,18 +559,24 @@ mod tests {
     #[test]
     fn expire() {
         let max_age_secs = 2;
-        let mut queue: SumQueue<i32> = SumQueue::with_capacity(
-            Duration::from_secs(max_age_secs), 20);
+        let mut queue: SumQueue<i32> =
+            SumQueue::with_capacity(Duration::from_secs(max_age_secs), 20);
         queue.push(1);
         queue.push(5);
         queue.push(2);
         assert_eq!(queue.iter().collect::<Vec<_>>(), vec![&1, &5, &2]);
-        println!("Elements in queue with max age of {} secs: {:?}",
-                 max_age_secs, queue.iter().collect::<Vec<_>>());
+        println!(
+            "Elements in queue with max age of {} secs: {:?}",
+            max_age_secs,
+            queue.iter().collect::<Vec<_>>()
+        );
 
         sleep_secs(1);
         assert_eq!(queue.iter().collect::<Vec<_>>(), vec![&1, &5, &2]);
-        println!("No expiration yet, same elements: {:?}", queue.iter().collect::<Vec<_>>());
+        println!(
+            "No expiration yet, same elements: {:?}",
+            queue.iter().collect::<Vec<_>>()
+        );
 
         println!("\nAdding element 50 ...");
         queue.push(50);
@@ -575,8 +585,10 @@ mod tests {
 
         sleep_secs(1);
         assert_eq!(queue.iter().collect::<Vec<_>>(), vec![&50]);
-        println!("Expired original list, only 50 in the list: {:?}",
-                 queue.iter().collect::<Vec<_>>());
+        println!(
+            "Expired original list, only 50 in the list: {:?}",
+            queue.iter().collect::<Vec<_>>()
+        );
 
         sleep_secs(2);
         assert_eq!(queue.iter().collect::<Vec<_>>().len(), 0);
@@ -586,18 +598,24 @@ mod tests {
     #[test]
     fn expire_less_one_sec() {
         let max_age_millis = 200;
-        let mut queue: SumQueue<i32> = SumQueue::with_capacity(
-            Duration::from_millis(max_age_millis), 20);
+        let mut queue: SumQueue<i32> =
+            SumQueue::with_capacity(Duration::from_millis(max_age_millis), 20);
         queue.push(1);
         queue.push(5);
         queue.push(2);
         assert_eq!(queue.iter().collect::<Vec<_>>(), vec![&1, &5, &2]);
-        println!("Elements in queue with max age of {} millis: {:?}",
-                 max_age_millis, queue.iter().collect::<Vec<_>>());
+        println!(
+            "Elements in queue with max age of {} millis: {:?}",
+            max_age_millis,
+            queue.iter().collect::<Vec<_>>()
+        );
 
         sleep_millis(100);
         assert_eq!(queue.iter().collect::<Vec<_>>(), vec![&1, &5, &2]);
-        println!("No expiration yet, same elements: {:?}", queue.iter().collect::<Vec<_>>());
+        println!(
+            "No expiration yet, same elements: {:?}",
+            queue.iter().collect::<Vec<_>>()
+        );
 
         println!("\nAdding element 50 ...");
         queue.push(50);
@@ -606,8 +624,10 @@ mod tests {
 
         sleep_millis(100);
         assert_eq!(queue.iter().collect::<Vec<_>>(), vec![&50]);
-        println!("Expired original list, only 50 in the list: {:?}",
-                 queue.iter().collect::<Vec<_>>());
+        println!(
+            "Expired original list, only 50 in the list: {:?}",
+            queue.iter().collect::<Vec<_>>()
+        );
 
         sleep_millis(200);
         assert_eq!(queue.iter().collect::<Vec<_>>().len(), 0);
