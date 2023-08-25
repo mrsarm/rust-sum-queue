@@ -25,3 +25,5 @@ jobs:
       run: cargo fmt -- --check
     - name: Run tests
       run: cargo test --verbose
+    - name: Build docs
+      run: cargo doc --no-deps
